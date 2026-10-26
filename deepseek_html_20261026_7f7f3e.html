@@ -93,6 +93,22 @@
       }
       /* .stage.has-image .dropzone { display: none; } */
 
+      .stage.has-image .dropzone {
+        border-color: transparent;
+        background: transparent;
+        color: transparent;
+        pointer-events: auto; /* keep it clickable */
+        cursor: pointer;
+      }
+      .stage.has-image .dropzone svg,
+      .stage.has-image .dropzone .hint,
+      .stage.has-image .dropzone .subhint {
+        opacity: 0;
+      }
+      .stage.has-image .dropzone:hover {
+        background: rgba(74, 144, 226, 0.06);
+      }
+
       /* Thumbnail strip */
       .strip {
         display: flex;
@@ -193,6 +209,21 @@
         .thumb {
           cursor: default;
         }
+      }
+      .thumb.add-more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+        color: #9aa1ad;
+        background: #f0f2f5;
+        border: 2px dashed #c7ccd6;
+        cursor: pointer;
+      }
+      .thumb.add-more:hover {
+        color: #4a90e2;
+        border-color: #4a90e2;
+        background: #f0f6ff;
       }
 
       /* Actions */
@@ -365,6 +396,10 @@
         const dlThumb = document.getElementById('dlThumb');
         const clearAll = document.getElementById('clearAll');
         const toasts = document.getElementById('toasts');
+
+        canvas.addEventListener('click', () => {
+          if (items.length > 0 && items.length < MAX_IMAGES) fileInput.click();
+        });
 
         // ---------- Toast ----------
         function toast(msg, ms = 2600) {
@@ -582,6 +617,17 @@
 
             strip.appendChild(el);
           });
+
+          // "+" add-more tile (only when under cap)
+          if (items.length > 0 && items.length < MAX_IMAGES) {
+            const add = document.createElement('button');
+            add.className = 'thumb add-more';
+            add.type = 'button';
+            add.title = '继续添加图片';
+            add.textContent = '+';
+            add.addEventListener('click', () => fileInput.click());
+            strip.appendChild(add);
+          }
         }
 
         // ---------- Mutations ----------

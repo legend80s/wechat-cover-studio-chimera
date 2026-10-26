@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>微信公众号封面拼接工具</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #f5f6f8;
+    color: #1a1a1a;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: #888; margin-bottom: 20px; }
+
+  /* Dropzone / preview stage */
+  .stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2.35 / 1;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  }
+  #preview {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .dropzone {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 8px;
+    border: 2px dashed #c7ccd6;
+    border-radius: 10px;
+    color: #9aa1ad;
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+    background: #fafbfc;
+  }
+  .dropzone:hover, .dropzone.hover {
+    border-color: #4a90e2;
+    background: #f0f6ff;
+    color: #4a90e2;
+  }
+  .dropzone svg { width: 40px; height: 40px; opacity: .7; }
+  .dropzone .hint { font-size: 15px; font-weight: 500; }
+  .dropzone .subhint { font-size: 12px; opacity: .8; }
+  .stage.dragover .dropzone { border-color: #4a90e2; background: #f0f6ff; color: #4a90e2; }
+  .stage.has-image .dropzone { display: none; }
+
+  /* Thumbnail strip */
+  .strip {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin-top: 16px; min-height: 0;
+  }
+  .thumb {
+    position: relative;
+    width: 92px; height: 62px;
+    border-radius: 6px; overflow: hidden;
+    background: #e9ecf1;
+    cursor: grab;
+    border: 2px solid transparent;
+    transition: border-color .12s, opacity .12s, transform .12s;
+    flex: 0 0 auto;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .thumb.dragging { opacity: .4; }
+  .thumb.drop-target { border-color: #4a90e2; }
+  .thumb .idx {
+    position: absolute; top: 3px; left: 3px;
+    background: rgba(0,0,0,.55); color: #fff;
+    font-size: 10px; line-height: 1;
+    padding: 3px 5px; border-radius: 4px;
+  }
+  .thumb .remove {
+    position: absolute; top: 3px; right: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(0,0,0,.55); color: #fff;
+    border: none; cursor: pointer;
+    font-size: 12px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .12s;
+  }
+  .thumb:hover .remove { opacity: 1; }
+  .thumb .move {
+    position: absolute; bottom: 3px; left: 3px; right: 3px;
+    display: none; justify-content: space-between;
+  }
+  .thumb .move button {
+    width: 20px; height: 20px; border-radius: 4px;
+    background: rgba(0,0,0,.55); color: #fff;
+    border: none; cursor: pointer; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  @media (pointer: coarse) {
+    .thumb .move { display: flex; }
+    .thumb .remove { opacity: 1; }
+    .thumb { cursor: default; }
+  }
+
+  /* Actions */
+  .actions {
+    display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;
+  }
+  button.btn {
+    padding: 10px 20px; border-radius: 8px;
+    border: none; cursor: pointer;
+    font-size: 14px; font-weight: 500;
+    transition: background .12s, opacity .12s;
+  }
+  button.btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: #4a90e2; color: #fff; }
+  .btn-primary:not(:disabled):hover { background: #3a7bc8; }
+  .btn-secondary { background: #fff; color: #333; border: 1px solid #d5dae2; }
+  .btn-secondary:not(:disabled):hover { background: #f5f6f8; }
+  .spacer { flex: 1; }
+
+  /* Toast */
+  #toasts {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 100; pointer-events: none;
+  }
+  .toast {
+    background: rgba(30,34,42,.92); color: #fff;
+    padding: 9px 16px; border-radius: 8px;
+    font-size: 13px;
+    animation: fadein .18s ease-out;
+    max-width: 80vw;
+  }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Loading spinner */
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>微信公众号封面拼接工具</h1>
+  <p class="sub">拖入 1–6 张图片，自动拼接为 2.35:1 公众号封面（900×383），并生成 1:1 缩略图</p>
+
+  <div class="stage" id="stage">
+    <canvas id="preview"></canvas>
+    <div class="dropzone" id="dropzone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M12 16V4m0 0L8 8m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round"/>
+      </svg>
+      <span class="hint">拖入图片</span>
+      <span class="subhint">或点击选择 · 支持粘贴 · 最多 6 张</span>
+    </div>
+  </div>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="dlCover" disabled>下载封面</button>
+    <button class="btn btn-secondary" id="dlThumb" disabled>下载缩略图</button>
+    <div class="spacer"></div>
+    <button class="btn btn-secondary" id="clearAll" disabled>清空</button>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*" multiple>
+<div id="toasts"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Constants ----------
+  const COVER_W = 900;
+  const COVER_H = 383;
+  const THUMB_SIZE = 383;
+  const MAX_IMAGES = 6;
+  const JPEG_QUALITY = 0.92;
+  const BG_COLOR = '#ffffff';
+
+  // ---------- State ----------
+  /** @type {{ img: HTMLImageElement, url: string }[]} */
+  let items = [];
+  let dragSrcIndex = -1;
+
+  // ---------- DOM ----------
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('preview');
+  const ctx = canvas.getContext('2d');
+  const dropzone = document.getElementById('dropzone');
+  const strip = document.getElementById('strip');
+  const fileInput = document.getElementById('fileInput');
+  const dlCover = document.getElementById('dlCover');
+  const dlThumb = document.getElementById('dlThumb');
+  const clearAll = document.getElementById('clearAll');
+  const toasts = document.getElementById('toasts');
+
+  // ---------- Toast ----------
+  function toast(msg, ms = 2600) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    toasts.appendChild(el);
+    setTimeout(() => {
+      el.style.transition = 'opacity .25s';
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 260);
+    }, ms);
+  }
+
+  // ---------- Preview canvas sizing (DPR-aware) ----------
+  function sizePreviewCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const cssW = rect.width || COVER_W;
+    const cssH = rect.height || COVER_H;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+  }
+
+  // ---------- Layout: cell rects for n images ----------
+  // Returns array of {x,y,w,h} in cover coordinates, one per image (may be fewer
+  // than total cells when n is odd on a grid — e.g. 5 in 3×2 leaves one blank).
+  function getCells(n) {
+    const W = COVER_W, H = COVER_H;
+    if (n <= 1) return [{ x: 0, y: 0, w: W, h: H }];
+    if (n === 2) {
+      const w = W / 2;
+      return [
+        { x: 0, y: 0, w, h: H },
+        { x: w, y: 0, w, h: H },
+      ];
+    }
+    if (n === 3) {
+      const w = W / 3;
+      return [
+        { x: 0, y: 0, w, h: H },
+        { x: w, y: 0, w, h: H },
+        { x: w * 2, y: 0, w, h: H },
+      ];
+    }
+    if (n === 4) {
+      const w = W / 2, h = H / 2;
+      return [
+        { x: 0, y: 0, w, h },
+        { x: w, y: 0, w, h },
+        { x: 0, y: h, w, h },
+        { x: w, y: h, w, h },
+      ];
+    }
+    // 5 or 6: 3 columns × 2 rows. For 5, cells[5] (bottom-right) is unused.
+    const w = W / 3, h = H / 2;
+    const cells = [];
+    for (let r = 0; r < 2; r++) {
+      for (let c = 0; c < 3; c++) {
+        cells.push({ x: c * w, y: r * h, w, h });
+      }
+    }
+    return cells.slice(0, n);
+  }
+
+  // ---------- Draw one image cover-cropped (center) into a rect on target ctx ----------
+  function drawCover(targetCtx, img, cell, scale = 1) {
+    const cx = cell.x * scale, cy = cell.y * scale;
+    const cw = cell.w * scale, ch = cell.h * scale;
+
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return;
+
+    const cellRatio = cw / ch;
+    const imgRatio = iw / ih;
+
+    let sx, sy, sw, sh;
+    if (imgRatio > cellRatio) {
+      // image wider than cell → crop sides
+      sh = ih;
+      sw = ih * cellRatio;
+      sx = (iw - sw) / 2;
+      sy = 0;
+    } else {
+      // image taller than cell → crop top/bottom
+      sw = iw;
+      sh = iw / cellRatio;
+      sx = 0;
+      sy = (ih - sh) / 2;
+    }
+    targetCtx.drawImage(img, sx, sy, sw, sh, cx, cy, cw, ch);
+  }
+
+  // ---------- Render the composed cover onto a given ctx at a given size ----------
+  function composeOnto(targetCtx, targetW, targetH) {
+    const scale = targetW / COVER_W;
+    targetCtx.fillStyle = BG_COLOR;
+    targetCtx.fillRect(0, 0, targetW, targetH);
+
+    if (items.length === 0) return;
+
+    const cells = getCells(items.length);
+    for (let i = 0; i < items.length; i++) {
+      drawCover(targetCtx, items[i].img, cells[i], scale);
+    }
+  }
+
+  // ---------- Re-render preview ----------
+  function render() {
+    // Ensure canvas has proper CSS size for DPR calc
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth || COVER_W;
+    const cssH = canvas.clientHeight || COVER_H;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    composeOnto(ctx, canvas.width, canvas.height);
+
+    // Toggle state classes
+    stage.classList.toggle('has-image', items.length > 0);
+    dlCover.disabled = items.length === 0;
+    dlThumb.disabled = items.length === 0;
+    clearAll.disabled = items.length === 0;
+  }
+
+  // ---------- Thumbnail strip ----------
+  function renderStrip() {
+    strip.innerHTML = '';
+    items.forEach((item, i) => {
+      const el = document.createElement('div');
+      el.className = 'thumb';
+      el.draggable = true;
+      el.dataset.index = i;
+
+      const img = document.createElement('img');
+      img.src = item.url;
+      img.alt = `图片 ${i + 1}`;
+      el.appendChild(img);
+
+      const idx = document.createElement('span');
+      idx.className = 'idx';
+      idx.textContent = i + 1;
+      el.appendChild(idx);
+
+      const rm = document.createElement('button');
+      rm.className = 'remove';
+      rm.textContent = '×';
+      rm.title = '移除';
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeAt(i);
+      });
+      el.appendChild(rm);
+
+      // Mobile move buttons
+      const move = document.createElement('div');
+      move.className = 'move';
+      const left = document.createElement('button');
+      left.textContent = '←';
+      left.title = '左移';
+      left.addEventListener('click', (e) => { e.stopPropagation(); moveItem(i, i - 1); });
+      const right = document.createElement('button');
+      right.textContent = '→';
+      right.title = '右移';
+      right.addEventListener('click', (e) => { e.stopPropagation(); moveItem(i, i + 1); });
+      move.appendChild(left);
+      move.appendChild(right);
+      el.appendChild(move);
+
+      // Drag events
+      el.addEventListener('dragstart', (e) => {
+        dragSrcIndex = i;
+        el.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', String(i)); } catch (_) {}
+      });
+      el.addEventListener('dragend', () => {
+        el.classList.remove('dragging');
+        dragSrcIndex = -1;
+        strip.querySelectorAll('.drop-target').forEach(n => n.classList.remove('drop-target'));
+      });
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (dragSrcIndex !== -1 && dragSrcIndex !== i) el.classList.add('drop-target');
+      });
+      el.addEventListener('dragleave', () => el.classList.remove('drop-target'));
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.classList.remove('drop-target');
+        if (dragSrcIndex === -1 || dragSrcIndex === i) return;
+        moveItem(dragSrcIndex, i);
+      });
+
+      strip.appendChild(el);
+    });
+  }
+
+  // ---------- Mutations ----------
+  function moveItem(from, to) {
+    if (to < 0 || to >= items.length || from === to) return;
+    const [it] = items.splice(from, 1);
+    items.splice(to, 0, it);
+    renderStrip();
+    render();
+  }
+
+  function removeAt(i) {
+    const [removed] = items.splice(i, 1);
+    if (removed) URL.revokeObjectURL(removed.url);
+    renderStrip();
+    render();
+  }
+
+  function clearAllItems() {
+    items.forEach(it => URL.revokeObjectURL(it.url));
+    items = [];
+    renderStrip();
+    render();
+  }
+
+  // ---------- File intake ----------
+  function isImageFile(file) {
+    return file && file.type && file.type.startsWith('image/');
+  }
+
+  async function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => resolve({ img, url });
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+      img.src = url;
+    });
+  }
+
+  async function addFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+
+    // Determine capacity
+    const room = MAX_IMAGES - items.length;
+    if (room <= 0) {
+      toast(`最多 ${MAX_IMAGES} 张，已忽略 ${files.length} 张`);
+      return;
+    }
+
+    // Filter to images first
+    const imageFiles = files.filter(isImageFile);
+    const nonImageCount = files.length - imageFiles.length;
+    if (nonImageCount > 0) {
+      toast(`已跳过 ${nonImageCount} 个非图片文件`);
+    }
+    if (imageFiles.length === 0) return;
+
+    // Enforce cap
+    let toLoad = imageFiles;
+    let overflow = 0;
+    if (imageFiles.length > room) {
+      toLoad = imageFiles.slice(0, room);
+      overflow = imageFiles.length - room;
+    }
+    if (overflow > 0) {
+      toast(`最多 ${MAX_IMAGES} 张，已忽略 ${overflow} 张`);
+    }
+
+    // Show spinner-ish state via toast? Keep it simple: load with brief cursor wait.
+    const prevCursor = document.body.style.cursor;
+    document.body.style.cursor = 'progress';
+
+    // Decode sequentially to preserve drop order and avoid blocking
+    const loaded = [];
+    for (const f of toLoad) {
+      try {
+        loaded.push(await loadImageFromFile(f));
+      } catch (_) {
+        toast(`无法读取图片：${f.name || '未命名'}`);
+      }
+    }
+    document.body.style.cursor = prevCursor;
+
+    if (loaded.length === 0) return;
+    items = items.concat(loaded);
+    renderStrip();
+    render();
+  }
+
+  // ---------- Export helpers ----------
+  function makeExportCanvas() {
+    const c = document.createElement('canvas');
+    c.width = COVER_W;
+    c.height = COVER_H;
+    const cx = c.getContext('2d');
+    composeOnto(cx, COVER_W, COVER_H);
+    return c;
+  }
+
+  function makeThumbCanvas() {
+    const cover = makeExportCanvas();
+    const c = document.createElement('canvas');
+    c.width = THUMB_SIZE;
+    c.height = THUMB_SIZE;
+    const cx = c.getContext('2d');
+    cx.fillStyle = BG_COLOR;
+    cx.fillRect(0, 0, THUMB_SIZE, THUMB_SIZE);
+    // Center-crop the cover: take THUMB_SIZE x THUMB_SIZE window centered.
+    const sx = (COVER_W - THUMB_SIZE) / 2;
+    const sy = (COVER_H - THUMB_SIZE) / 2;
+    cx.drawImage(cover, sx, sy, THUMB_SIZE, THUMB_SIZE, 0, 0, THUMB_SIZE, THUMB_SIZE);
+    return c;
+  }
+
+  function downloadCanvas(c, filename) {
+    c.toBlob((blob) => {
+      if (!blob) { toast('导出失败'); return; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }, 'image/jpeg', JPEG_QUALITY);
+  }
+
+  // ---------- Event wiring ----------
+  dropzone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    addFiles(e.target.files);
+    fileInput.value = ''; // allow re-selecting same file
+  });
+
+  // Whole-page drag & drop (so dropping anywhere in the stage works)
+  let dragDepth = 0;
+  ['dragenter', 'dragover'].forEach(ev => {
+    window.addEventListener(ev, (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+        e.preventDefault();
+      }
+    });
+  });
+
+  stage.addEventListener('dragenter', (e) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      dragDepth++;
+      stage.classList.add('dragover');
+    }
+  });
+  stage.addEventListener('dragover', (e) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
+  stage.addEventListener('dragleave', (e) => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) stage.classList.remove('dragover');
+  });
+  stage.addEventListener('drop', (e) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      dragDepth = 0;
+      stage.classList.remove('dragover');
+      addFiles(e.dataTransfer.files);
+    }
+  });
+
+  // Paste
+  window.addEventListener('paste', (e) => {
+    const itemsInClip = e.clipboardData && e.clipboardData.items;
+    if (!itemsInClip) return;
+    const files = [];
+    for (const it of itemsInClip) {
+      if (it.kind === 'file') {
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  });
+
+  // Buttons
+  dlCover.addEventListener('click', () => {
+    if (!items.length) return;
+    downloadCanvas(makeExportCanvas(), 'wechat-cover-900x383.jpg');
+  });
+  dlThumb.addEventListener('click', () => {
+    if (!items.length) return;
+    downloadCanvas(makeThumbCanvas(), 'wechat-cover-thumbnail-383x383.jpg');
+  });
+  clearAll.addEventListener('click', clearAllItems);
+
+  // Resize → re-render at new DPR/size
+  window.addEventListener('resize', () => {
+    // Only re-render if we have images (or even empty state to keep crisp)
+    render();
+  });
+
+  // ---------- Init ----------
+  render();
+})();
+</script>
+</body>
+</html>

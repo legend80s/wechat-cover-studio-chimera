@@ -1,0 +1,11 @@
+services:
+  - type: web
+    runtime: node
+    name: tanstack-start-app
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    envVars:
+      - key: NITRO_PRESET
+        value: render-com
+      - key: HOST
+        value: 0.0.0.0

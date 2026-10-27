@@ -1,0 +1,22 @@
+{
+  "bundler": "vite",
+  "projectName": "wechat-cover-studio",
+  "mode": "file-router",
+  "typescript": true,
+  "packageManager": "pnpm",
+  "includeExamples": true,
+  "tailwind": true,
+  "projectPreset": "default",
+  "routerOnly": false,
+  "addOnOptions": {},
+  "git": false,
+  "install": true,
+  "intent": true,
+  "version": 1,
+  "framework": "react",
+  "chosenAddOns": [
+    "biome",
+    "render",
+    "shadcn"
+  ]
+}

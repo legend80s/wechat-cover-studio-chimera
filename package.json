@@ -1,7 +1,7 @@
 {
-  "name": "chimera",
+  "name": "wechat-cover-studio",
   "version": "1.0.0",
-  "description": "🦁🐐🐍 wechat-cover-studio: a cover mosaic tool to generate wechat (2.35:1) cover image using multiple images",
+  "description": "Chimera 🦁🐐🐍 wechat-cover-studio: a cover mosaic tool to generate wechat (2.35:1) cover image using multiple images",
   "type": "module",
   "main": "index.js",
   "scripts": {
